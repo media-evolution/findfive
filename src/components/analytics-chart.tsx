@@ -184,7 +184,7 @@ export function AnalyticsChart() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend 
                   formatter={(value, entry) => (
-                    <span style={{ color: entry.color }}>{entry.payload.label}</span>
+                    <span style={{ color: entry.color }}>{(entry.payload as any)?.label || value}</span>
                   )}
                 />
               </PieChart>

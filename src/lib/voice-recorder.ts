@@ -113,9 +113,3 @@ export class VoiceRecorder {
 }
 
 // Extend the Window interface for TypeScript
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
-  }
-}
