@@ -26,10 +26,10 @@ const theme = createTheme({
       '#C92A2A'
     ]
   },
-  fontFamily: 'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  fontFamilyMonospace: 'var(--font-geist-mono), "SF Mono", Monaco, Inconsolata, "Roboto Mono", "Source Code Pro", monospace',
+  fontFamily: 'var(--font-geist-sans, -apple-system), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamilyMonospace: 'var(--font-geist-mono, "SF Mono"), "SF Mono", Monaco, Inconsolata, "Roboto Mono", "Source Code Pro", monospace',
   headings: {
-    fontFamily: 'var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: 'var(--font-geist-sans, -apple-system), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   },
   defaultRadius: 'lg',
   components: {

@@ -1,3 +1,10 @@
+/* Fallback font definitions for Mantine */
+:root {
+  --mantine-font-family: var(--font-geist-sans, -apple-system), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mantine-font-family-headings: var(--font-geist-sans, -apple-system), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mantine-font-family-monospace: var(--font-geist-mono, 'SF Mono'), 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', 'Source Code Pro', monospace;
+}
+
 /* Reset and base styles */
 * {
   box-sizing: border-box;
