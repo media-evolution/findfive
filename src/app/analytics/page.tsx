@@ -49,57 +49,86 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState('week')
   const [activeTab, setActiveTab] = useState('overview')
 
-  // Calculate analytics data
-  const categoryData = entries.reduce((acc, entry) => {
-    const category = entry.category
-    if (!acc[category]) {
-      acc[category] = { count: 0, minutes: 0 }
+  // Calculate analytics data using V2 fields
+  const taskTypeData = entries.reduce((acc, entry) => {
+    const taskType = entry.task_type || 'work'
+    if (!acc[taskType]) {
+      acc[taskType] = { count: 0, minutes: 0 }
     }
-    acc[category].count++
-    acc[category].minutes += entry.duration_minutes
+    acc[taskType].count++
+    acc[taskType].minutes += entry.duration_minutes
     return acc
   }, {} as Record<string, { count: number; minutes: number }>)
 
-  const pieData = Object.entries(categoryData).map(([category, data]) => ({
-    name: category.charAt(0).toUpperCase() + category.slice(1),
+  const enjoymentData = entries.reduce((acc, entry) => {
+    const enjoyment = entry.enjoyment || 'neutral'
+    if (!acc[enjoyment]) {
+      acc[enjoyment] = { count: 0, minutes: 0 }
+    }
+    acc[enjoyment].count++
+    acc[enjoyment].minutes += entry.duration_minutes
+    return acc
+  }, {} as Record<string, { count: number; minutes: number }>)
+
+  const energyData = entries.reduce((acc, entry) => {
+    const energyLevel = entry.energy_level || 3
+    const energyLabel = energyLevel <= 2 ? 'Low' : energyLevel >= 4 ? 'High' : 'Medium'
+    if (!acc[energyLabel]) {
+      acc[energyLabel] = { count: 0, minutes: 0 }
+    }
+    acc[energyLabel].count++
+    acc[energyLabel].minutes += entry.duration_minutes
+    return acc
+  }, {} as Record<string, { count: number; minutes: number }>)
+
+  const pieData = Object.entries(taskTypeData).map(([taskType, data]) => ({
+    name: taskType.charAt(0).toUpperCase() + taskType.slice(1),
     value: data.minutes,
     count: data.count
   }))
 
   const categoryColors = {
-    Delegate: '#40c057',
-    Automate: '#fd7e14',
-    Eliminate: '#fa5252',
-    Personal: '#7950f2'
+    Work: '#339af0',
+    Personal: '#7950f2',
+    Both: '#51cf66'
   }
 
-  // Calculate time saved potential
-  const potentialTimeSaved = 
-    (categoryData.delegate?.minutes || 0) + 
-    (categoryData.automate?.minutes || 0) * 0.8 + 
-    (categoryData.eliminate?.minutes || 0)
+  // Calculate average energy level
+  const avgEnergyLevel = entries.length > 0 
+    ? entries.reduce((sum, entry) => sum + (entry.energy_level || 3), 0) / entries.length
+    : 0
 
   const totalMinutes = entries.reduce((sum, entry) => sum + entry.duration_minutes, 0)
 
-  // Daily trend data
+  // Daily trend data by task type
   const dailyData = entries.reduce((acc, entry) => {
     const date = new Date(entry.created_at).toLocaleDateString()
     if (!acc[date]) {
-      acc[date] = { date, delegate: 0, automate: 0, eliminate: 0, personal: 0 }
+      acc[date] = { date, work: 0, personal: 0, both: 0 }
     }
-    acc[date][entry.category] += entry.duration_minutes
+    const taskType = entry.task_type || 'work'
+    acc[date][taskType] += entry.duration_minutes
     return acc
   }, {} as Record<string, any>)
 
   const trendData = Object.values(dailyData).slice(-7)
 
-  // Top tasks
+  // Top tasks with V2 data
   const taskFrequency = entries.reduce((acc, entry) => {
     if (!acc[entry.task_name]) {
-      acc[entry.task_name] = { name: entry.task_name, count: 0, category: entry.category, minutes: 0 }
+      acc[entry.task_name] = { 
+        name: entry.task_name, 
+        count: 0, 
+        taskType: entry.task_type || 'work',
+        enjoyment: entry.enjoyment || 'neutral',
+        avgEnergy: entry.energy_level || 3,
+        minutes: 0 
+      }
     }
     acc[entry.task_name].count++
     acc[entry.task_name].minutes += entry.duration_minutes
+    // Update average energy
+    acc[entry.task_name].avgEnergy = (acc[entry.task_name].avgEnergy + (entry.energy_level || 3)) / 2
     return acc
   }, {} as Record<string, any>)
 
@@ -166,7 +195,7 @@ export default function AnalyticsPage() {
             <Tabs.Panel value="overview" pt="lg">
               {/* Summary Cards */}
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" mb="lg">
-                <Card radius="xl" withBorder>
+                <Card radius="lg" withBorder>
                   <Group justify="space-between" mb="xs">
                     <Text size="sm" c="dimmed">Total Time Tracked</Text>
                     <ThemeIcon variant="light" radius="xl" size="sm">
@@ -179,25 +208,25 @@ export default function AnalyticsPage() {
                   </Text>
                 </Card>
 
-                <Card radius="xl" withBorder>
+                <Card radius="lg" withBorder>
                   <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">Time Save Potential</Text>
-                    <ThemeIcon variant="light" radius="xl" size="sm" color="green">
+                    <Text size="sm" c="dimmed">Average Energy Level</Text>
+                    <ThemeIcon variant="light" radius="xl" size="sm" color="orange">
                       <Target size={16} />
                     </ThemeIcon>
                   </Group>
-                  <Text size="xl" fw={700} c="green">
-                    {Math.floor(potentialTimeSaved / 60)}h {Math.round(potentialTimeSaved % 60)}m
+                  <Text size="xl" fw={700} c="orange">
+                    {avgEnergyLevel.toFixed(1)}/5
                   </Text>
                   <Text size="xs" c="dimmed" mt={4}>
-                    {totalMinutes > 0 ? Math.round((potentialTimeSaved / totalMinutes) * 100) : 0}% of total time
+                    {avgEnergyLevel >= 4 ? 'High energy tasks' : avgEnergyLevel >= 3 ? 'Moderate energy' : 'Low energy tasks'}
                   </Text>
                 </Card>
               </SimpleGrid>
 
-              {/* Category Distribution */}
+              {/* Task Type Distribution */}
               <Card radius="xl" withBorder mb="lg">
-                <Text size="lg" fw={600} mb="md">Category Distribution</Text>
+                <Text size="lg" fw={600} mb="md">Task Type Distribution</Text>
                 {pieData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
@@ -224,32 +253,44 @@ export default function AnalyticsPage() {
               </Card>
 
               {/* Top Tasks */}
-              <Card radius="xl" withBorder>
+              <Card radius="lg" withBorder>
                 <Text size="lg" fw={600} mb="md">Top Tasks by Time</Text>
                 <Stack gap="sm">
                   {topTasks.length > 0 ? topTasks.map((task: any, index: number) => (
                     <Box key={index}>
                       <Group justify="space-between" mb={4}>
                         <Text size="sm" lineClamp={1}>{task.name}</Text>
-                        <Badge 
-                          color={
-                            task.category === 'delegate' ? 'green' :
-                            task.category === 'automate' ? 'orange' :
-                            task.category === 'eliminate' ? 'red' : 'violet'
-                          }
-                          size="sm"
-                        >
-                          {task.minutes}m
-                        </Badge>
+                        <Group gap={4}>
+                          <Badge 
+                            color={
+                              task.taskType === 'work' ? 'blue' :
+                              task.taskType === 'personal' ? 'violet' : 'green'
+                            }
+                            size="xs"
+                          >
+                            {task.taskType}
+                          </Badge>
+                          <Badge 
+                            color="gray"
+                            size="xs"
+                          >
+                            {task.minutes}m
+                          </Badge>
+                          <Badge 
+                            color={task.avgEnergy >= 4 ? 'green' : task.avgEnergy >= 3 ? 'yellow' : 'red'}
+                            size="xs"
+                          >
+                            ⚡{Math.round(task.avgEnergy)}
+                          </Badge>
+                        </Group>
                       </Group>
                       <Progress 
                         value={(task.minutes / totalMinutes) * 100} 
                         size="sm" 
                         radius="xl"
                         color={
-                          task.category === 'delegate' ? 'green' :
-                          task.category === 'automate' ? 'orange' :
-                          task.category === 'eliminate' ? 'red' : 'violet'
+                          task.taskType === 'work' ? 'blue' :
+                          task.taskType === 'personal' ? 'violet' : 'green'
                         }
                       />
                     </Box>
@@ -261,7 +302,7 @@ export default function AnalyticsPage() {
             </Tabs.Panel>
 
             <Tabs.Panel value="trends" pt="lg">
-              <Card radius="xl" withBorder>
+              <Card radius="lg" withBorder>
                 <Text size="lg" fw={600} mb="md">Daily Activity Trend</Text>
                 {trendData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
@@ -271,10 +312,9 @@ export default function AnalyticsPage() {
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Area type="monotone" dataKey="delegate" stackId="1" stroke="#40c057" fill="#40c057" />
-                      <Area type="monotone" dataKey="automate" stackId="1" stroke="#fd7e14" fill="#fd7e14" />
-                      <Area type="monotone" dataKey="eliminate" stackId="1" stroke="#fa5252" fill="#fa5252" />
+                      <Area type="monotone" dataKey="work" stackId="1" stroke="#339af0" fill="#339af0" />
                       <Area type="monotone" dataKey="personal" stackId="1" stroke="#7950f2" fill="#7950f2" />
+                      <Area type="monotone" dataKey="both" stackId="1" stroke="#51cf66" fill="#51cf66" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
@@ -285,74 +325,84 @@ export default function AnalyticsPage() {
 
             <Tabs.Panel value="insights" pt="lg">
               <Stack gap="md">
-                <Card radius="xl" withBorder>
+                <Card radius="lg" withBorder>
                   <Group mb="md">
-                    <ThemeIcon variant="light" radius="xl" color="green" size="lg">
+                    <ThemeIcon variant="light" radius="xl" color="blue" size="lg">
                       <Target size={20} />
                     </ThemeIcon>
-                    <Text size="lg" fw={600}>Delegation Opportunities</Text>
+                    <Text size="lg" fw={600}>Work vs Personal Balance</Text>
                   </Group>
                   <Text size="sm" c="dimmed" mb="sm">
-                    Tasks you can delegate to free up {Math.round((categoryData.delegate?.minutes || 0) / 60)}h {(categoryData.delegate?.minutes || 0) % 60}m
+                    Work: {Math.round((taskTypeData.work?.minutes || 0) / 60)}h {(taskTypeData.work?.minutes || 0) % 60}m • 
+                    Personal: {Math.round((taskTypeData.personal?.minutes || 0) / 60)}h {(taskTypeData.personal?.minutes || 0) % 60}m
                   </Text>
                   <Text size="sm">
-                    Focus on delegating repetitive tasks that don't require your unique expertise. 
-                    {categoryData.delegate?.count ? ` You have ${categoryData.delegate.count} tasks marked for delegation.` : ''}
+                    {(taskTypeData.work?.minutes || 0) > (taskTypeData.personal?.minutes || 0) 
+                      ? 'You\'re spending more time on work tasks. Consider balancing with personal activities.'
+                      : 'Good balance between work and personal tasks.'}
                   </Text>
                 </Card>
 
-                <Card radius="xl" withBorder>
+                <Card radius="lg" withBorder>
                   <Group mb="md">
-                    <ThemeIcon variant="light" radius="xl" color="orange" size="lg">
+                    <ThemeIcon variant="light" radius="xl" color="green" size="lg">
                       <Lightbulb size={20} />
                     </ThemeIcon>
-                    <Text size="lg" fw={600}>Automation Potential</Text>
+                    <Text size="lg" fw={600}>Task Enjoyment Analysis</Text>
                   </Group>
                   <Text size="sm" c="dimmed" mb="sm">
-                    Tasks that could be automated, saving ~{Math.round((categoryData.automate?.minutes || 0) * 0.8 / 60)}h {Math.round((categoryData.automate?.minutes || 0) * 0.8 % 60)}m
+                    Liked: {enjoymentData.like?.count || 0} tasks • 
+                    Neutral: {enjoymentData.neutral?.count || 0} tasks • 
+                    Disliked: {enjoymentData.dislike?.count || 0} tasks
                   </Text>
                   <Text size="sm">
-                    Look for tools, templates, or software that can handle these repetitive tasks.
-                    {categoryData.automate?.count ? ` You have ${categoryData.automate.count} automation candidates.` : ''}
+                    {(enjoymentData.dislike?.count || 0) > (enjoymentData.like?.count || 0)
+                      ? 'You\'re spending significant time on tasks you dislike. Consider delegating or restructuring these.'
+                      : 'You seem to enjoy most of your tasks - that\'s great for productivity!'}
                   </Text>
                 </Card>
 
-                <Card radius="xl" withBorder>
+                <Card radius="lg" withBorder>
                   <Group mb="md">
-                    <ThemeIcon variant="light" radius="xl" color="red" size="lg">
+                    <ThemeIcon variant="light" radius="xl" color="orange" size="lg">
                       <TrendingUp size={20} />
                     </ThemeIcon>
-                    <Text size="lg" fw={600}>Time Wasters</Text>
+                    <Text size="lg" fw={600}>Energy Level Insights</Text>
                   </Group>
                   <Text size="sm" c="dimmed" mb="sm">
-                    Low-value tasks consuming {Math.round((categoryData.eliminate?.minutes || 0) / 60)}h {(categoryData.eliminate?.minutes || 0) % 60}m
+                    High Energy: {energyData.High?.minutes || 0}m • 
+                    Medium: {energyData.Medium?.minutes || 0}m • 
+                    Low Energy: {energyData.Low?.minutes || 0}m
                   </Text>
                   <Text size="sm">
-                    Consider eliminating or significantly reducing these activities.
-                    {categoryData.eliminate?.count ? ` You've identified ${categoryData.eliminate.count} tasks to eliminate.` : ''}
+                    {avgEnergyLevel >= 4 
+                      ? 'You maintain high energy levels across tasks. Great job!'
+                      : avgEnergyLevel >= 3
+                      ? 'Your energy levels are moderate. Consider scheduling demanding tasks when you\'re most energized.'
+                      : 'Many tasks are done at low energy. Try to schedule important work during your peak hours.'}
                   </Text>
                 </Card>
 
-                {potentialTimeSaved > 0 && (
-                  <Card radius="xl" withBorder bg="green.0">
+                {entries.length > 0 && (
+                  <Card radius="lg" withBorder bg="blue.0">
                     <Group>
                       <RingProgress
                         size={80}
                         thickness={8}
                         sections={[
-                          { value: (potentialTimeSaved / totalMinutes) * 100, color: 'green' },
+                          { value: (avgEnergyLevel / 5) * 100, color: avgEnergyLevel >= 4 ? 'green' : avgEnergyLevel >= 3 ? 'orange' : 'red' },
                         ]}
                         label={
                           <Text size="sm" ta="center" fw={700}>
-                            {Math.round((potentialTimeSaved / totalMinutes) * 100)}%
+                            {avgEnergyLevel.toFixed(1)}
                           </Text>
                         }
                       />
                       <Box style={{ flex: 1 }}>
-                        <Text size="lg" fw={600} c="green.9">Optimization Opportunity</Text>
-                        <Text size="sm" c="green.7">
-                          You could save up to {Math.floor(potentialTimeSaved / 60)}h {Math.round(potentialTimeSaved % 60)}m 
-                          by delegating, automating, or eliminating identified tasks.
+                        <Text size="lg" fw={600} c="blue.9">Overall Energy Score</Text>
+                        <Text size="sm" c="blue.7">
+                          Your average energy level across all tasks is {avgEnergyLevel.toFixed(1)}/5. 
+                          {avgEnergyLevel >= 4 ? ' Excellent energy management!' : ' Consider optimizing your schedule around peak energy times.'}
                         </Text>
                       </Box>
                     </Group>

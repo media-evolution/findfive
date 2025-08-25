@@ -27,11 +27,13 @@ import {
   EisenhowerStats 
 } from '@/lib/eisenhower-service'
 import { useUser } from '@/lib/user-context'
+import { useEntriesStore } from '@/store/entries-store'
 import { showNotification } from '@mantine/notifications'
 
 export default function EisenhowerPage() {
   const router = useRouter()
   const { userId, isAuthenticated, isLoading: authLoading } = useUser()
+  const { entries } = useEntriesStore()
   
   const [tasks, setTasks] = useState<EisenhowerTask[]>([])
   const [filteredTasks, setFilteredTasks] = useState<EisenhowerTask[]>([])
@@ -58,34 +60,76 @@ export default function EisenhowerPage() {
     }
   }, [userId])
 
-  // Load tasks and stats
-  const loadData = useCallback(async () => {
+  // Convert entries to Eisenhower tasks
+  const convertEntriesToTasks = useCallback((entries: any[]): EisenhowerTask[] => {
+    return entries.map(entry => ({
+      id: entry.id,
+      taskName: entry.task_name,
+      description: entry.description,
+      category: entry.category as 'delegate' | 'automate' | 'eliminate' | 'personal',
+      confidenceScore: entry.confidence_score || 0,
+      durationMinutes: entry.duration_minutes,
+      energyLevel: entry.energy_level || 3,
+      taskMode: entry.task_mode as 'proactive' | 'reactive' || 'reactive',
+      enjoyment: entry.enjoyment as 'like' | 'neutral' | 'dislike' || 'neutral',
+      taskType: entry.task_type as 'personal' | 'work' | 'both' || 'work',
+      frequency: entry.frequency as 'daily' | 'regular' | 'infrequent' || 'regular',
+      urgency: entry.urgency as 'urgent' | 'not_urgent',
+      importance: entry.importance as 'important' | 'not_important',
+      quadrant: EisenhowerService.getQuadrantFromUrgencyImportance(entry.urgency, entry.importance),
+      createdAt: entry.created_at,
+      sessionId: entry.session_id,
+      userId: entry.user_id || userId || ''
+    }))
+  }, [userId])
+
+  // Load tasks from local store
+  const loadData = useCallback(() => {
     if (!userId) return
 
     setIsLoading(true)
     setError(null)
     
     try {
-      const [tasksData, statsData] = await Promise.all([
-        EisenhowerService.getTasks(filters),
-        EisenhowerService.getStats(filters)
-      ])
-      
+      const tasksData = convertEntriesToTasks(entries)
       setTasks(tasksData)
       setFilteredTasks(tasksData)
-      setStats(statsData)
+      
+      // Calculate stats locally
+      const total = tasksData.length
+      const categorized = tasksData.filter(t => t.quadrant).length
+      const uncategorized = total - categorized
+
+      const byQuadrant: Record<EisenhowerQuadrant, number> = {
+        'urgent-important': 0,
+        'urgent-not-important': 0,
+        'not-urgent-important': 0,
+        'not-urgent-not-important': 0
+      }
+
+      const byCategory: Record<string, number> = {}
+
+      tasksData.forEach(task => {
+        if (task.quadrant) {
+          byQuadrant[task.quadrant]++
+        }
+        byCategory[task.category] = (byCategory[task.category] || 0) + 1
+      })
+
+      setStats({
+        total,
+        categorized,
+        uncategorized,
+        byQuadrant,
+        byCategory
+      })
     } catch (err) {
       console.error('Failed to load Eisenhower data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load data')
-      showNotification({
-        title: 'Error',
-        message: 'Failed to load tasks. Please try again.',
-        color: 'red'
-      })
     } finally {
       setIsLoading(false)
     }
-  }, [filters, userId])
+  }, [entries, userId, convertEntriesToTasks])
 
   // Load data on mount and filter changes
   useEffect(() => {
@@ -97,18 +141,22 @@ export default function EisenhowerPage() {
   // Handle task movement
   const handleTaskMove = async (taskId: string, quadrant: EisenhowerQuadrant) => {
     try {
-      await EisenhowerService.updateTaskQuadrant(taskId, quadrant)
+      const { urgency, importance } = EisenhowerService.quadrantToUrgencyImportance(quadrant)
       
-      // Optimistically update local state
+      // Update in entries store
+      const { updateEntry } = useEntriesStore.getState()
+      updateEntry(taskId, { urgency, importance })
+      
+      // Update local state
       setTasks(prev => prev.map(task => 
         task.id === taskId 
-          ? { ...task, quadrant, ...EisenhowerService.quadrantToUrgencyImportance(quadrant) }
+          ? { ...task, quadrant, urgency, importance }
           : task
       ))
       
       setFilteredTasks(prev => prev.map(task => 
         task.id === taskId 
-          ? { ...task, quadrant, ...EisenhowerService.quadrantToUrgencyImportance(quadrant) }
+          ? { ...task, quadrant, urgency, importance }
           : task
       ))
 
@@ -118,11 +166,8 @@ export default function EisenhowerPage() {
         color: 'green'
       })
 
-      // Reload stats
-      if (userId) {
-        const newStats = await EisenhowerService.getStats(filters)
-        setStats(newStats)
-      }
+      // Recalculate stats
+      loadData()
     } catch (err) {
       console.error('Failed to update task:', err)
       showNotification({
@@ -136,15 +181,18 @@ export default function EisenhowerPage() {
   // Handle bulk task movement
   const handleBulkMove = async (taskIds: string[], quadrant: EisenhowerQuadrant) => {
     try {
-      const updates = taskIds.map(taskId => ({ taskId, quadrant }))
-      await EisenhowerService.bulkUpdateQuadrants(updates)
+      const { urgency, importance } = EisenhowerService.quadrantToUrgencyImportance(quadrant)
+      const { updateEntry } = useEntriesStore.getState()
       
-      const quadrantInfo = EisenhowerService.quadrantToUrgencyImportance(quadrant)
+      // Update all tasks in entries store
+      taskIds.forEach(taskId => {
+        updateEntry(taskId, { urgency, importance })
+      })
       
-      // Optimistically update local state
+      // Update local state
       const updateTask = (task: EisenhowerTask) => 
         taskIds.includes(task.id) 
-          ? { ...task, quadrant, ...quadrantInfo }
+          ? { ...task, quadrant, urgency, importance }
           : task
 
       setTasks(prev => prev.map(updateTask))
@@ -156,11 +204,8 @@ export default function EisenhowerPage() {
         color: 'green'
       })
 
-      // Reload stats
-      if (userId) {
-        const newStats = await EisenhowerService.getStats(filters)
-        setStats(newStats)
-      }
+      // Recalculate stats
+      loadData()
     } catch (err) {
       console.error('Failed to bulk update tasks:', err)
       showNotification({
