@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useEntriesStore } from '@/store/entries-store'
+import { useUser } from '@/lib/user-context'
 import { X, Clock } from 'lucide-react'
 
 interface TaskModalProps {
@@ -18,6 +19,7 @@ export function TaskModal({ isOpen, onClose }: TaskModalProps) {
   const [confidence, setConfidence] = useState(85)
   
   const { addEntry, isLoading } = useEntriesStore()
+  const { userId } = useUser()
 
   useEffect(() => {
     if (isOpen) {
@@ -61,7 +63,7 @@ export function TaskModal({ isOpen, onClose }: TaskModalProps) {
       category,
       confidence_score: confidence / 100,
       duration_minutes: duration
-    })
+    }, userId)
 
     // Reset form
     setTaskName('')

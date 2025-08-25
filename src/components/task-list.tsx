@@ -2,17 +2,13 @@
 
 import { useEffect } from 'react'
 import { useEntriesStore } from '@/store/entries-store'
+import { useUser } from '@/lib/user-context'
 import { Clock, Trash2, Loader2 } from 'lucide-react'
 import { TimeEntry } from '@/lib/supabase'
 
 export function TaskList() {
-  const { entries, isLoading, error, loadEntries, deleteEntry, userId } = useEntriesStore()
-
-  useEffect(() => {
-    if (userId) {
-      loadEntries()
-    }
-  }, [userId, loadEntries])
+  const { entries, isLoading, error, deleteEntry } = useEntriesStore()
+  const { userId } = useUser()
 
   const categoryColors = {
     delegate: 'bg-green-100 text-green-800 border-green-200',

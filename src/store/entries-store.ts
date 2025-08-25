@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { supabase, TimeEntry } from '@/lib/supabase'
+import { TimeEntry } from '@/lib/supabase'
 import { categorizeTask, CategoryResult } from '@/lib/ai-service'
+import { withRetry, ApiError, NetworkError, ErrorReporter, VoiceError } from '@/lib/error-handling'
+import { useConnectivityStore } from '@/lib/connectivity'
 
 interface NewEntry {
   task_name: string
@@ -10,230 +12,207 @@ interface NewEntry {
   confidence_score?: number
   duration_minutes: number
   voice_transcript?: string
+  // V2 fields
+  session_id?: string
+  energy_level?: number // 1-5 scale
+  task_mode?: 'proactive' | 'reactive'
+  enjoyment?: 'like' | 'neutral' | 'dislike'
+  task_type?: 'personal' | 'work' | 'both'
+  frequency?: 'daily' | 'regular' | 'infrequent'
+  recorded_at?: string // ISO timestamp
+  recording_delay_minutes?: number
+  urgency?: 'urgent' | 'not_urgent'
+  importance?: 'important' | 'not_important'
 }
 
 interface EntriesStore {
   entries: TimeEntry[]
   isLoading: boolean
   error: string | null
-  userId: string | null
-  syncQueue: NewEntry[]
+  errorId: string | null
+  retryCount: number
+  lastRetryAt: Date | null
+  failedEntries: Array<{
+    entry: NewEntry
+    userId: string
+    timestamp: Date
+    errorId: string
+  }>
   
   // Actions
-  setUserId: (id: string) => void
-  addEntry: (entry: NewEntry) => Promise<void>
-  addEntryFromVoice: (transcript: string, durationMinutes?: number) => Promise<void>
-  updateEntry: (id: string, updates: Partial<TimeEntry>) => Promise<void>
-  deleteEntry: (id: string) => Promise<void>
-  loadEntries: () => Promise<void>
-  syncOfflineEntries: () => Promise<void>
+  addEntry: (entry: NewEntry, userId: string) => Promise<void>
+  addEntryFromVoice: (transcript: string, userId: string, durationMinutes?: number) => Promise<void>
+  updateEntry: (id: string, updates: Partial<TimeEntry>) => void
+  deleteEntry: (id: string) => void
+  retryFailedEntries: () => Promise<void>
+  removeFailedEntry: (errorId: string) => void
   clearError: () => void
 }
 
 export const useEntriesStore = create<EntriesStore>()(
   persist(
-    (set, get) => ({
-      entries: [],
-      isLoading: false,
-      error: null,
-      userId: null,
-      syncQueue: [],
+    (set, get) => {
+      const handleError = (error: unknown, operation: string, entry?: NewEntry, userId?: string) => {
+        const errorId = ErrorReporter.report(
+          error instanceof Error ? error : new Error('Unknown error'),
+          { operation, timestamp: new Date() }
+        )
+        
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+        
+        set(state => ({
+          error: errorMessage,
+          errorId,
+          retryCount: state.retryCount + 1,
+          lastRetryAt: new Date(),
+          isLoading: false,
+          failedEntries: entry && userId ? [
+            ...state.failedEntries,
+            { entry, userId, timestamp: new Date(), errorId }
+          ] : state.failedEntries
+        }))
+      }
 
-      setUserId: (id: string) => {
-        set({ userId: id })
+      return {
+        entries: [],
+        isLoading: false,
+        error: null,
+        errorId: null,
+        retryCount: 0,
+        lastRetryAt: null,
+        failedEntries: [],
+
+        addEntry: async (entry: NewEntry, userId: string) => {
+          set({ isLoading: true, error: null, errorId: null })
+
+          try {
+            // Check connectivity
+            const connectivityState = useConnectivityStore.getState()
+            
+            // Create local entry with UUID
+            const newEntry: TimeEntry = {
+              id: crypto.randomUUID(),
+              user_id: userId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_deleted: false,
+              input_method: entry.voice_transcript ? 'voice' : 'text',
+              confidence_score: entry.confidence_score || 0.5,
+              ...entry
+            }
+
+            // Add to local state optimistically
+            set(state => ({
+              entries: [newEntry, ...state.entries],
+              isLoading: false,
+              retryCount: 0
+            }))
+
+            // If offline, add to failed entries for later sync
+            if (!connectivityState.isOnline) {
+              set(state => ({
+                failedEntries: [
+                  ...state.failedEntries,
+                  { entry, userId, timestamp: new Date(), errorId: newEntry.id }
+                ]
+              }))
+              return
+            }
+
+            // TODO: When backend is ready, sync to server with retry logic
+            // await withRetry(() => syncEntryToServer(newEntry), retryConfig)
+
+          } catch (error) {
+            // Remove from local state on failure
+            set(state => ({
+              entries: state.entries.filter(e => e.user_id === userId && e.task_name === entry.task_name)
+            }))
+            handleError(error, 'addEntry', entry, userId)
+            throw error
+          }
+        },
+
+        addEntryFromVoice: async (transcript: string, userId: string, durationMinutes = 15) => {
+          set({ isLoading: true, error: null, errorId: null })
+
+          try {
+            // Skip AI categorization - let users categorize later
+            // Parse task name from transcript (simple extraction)
+            const taskName = transcript.length > 100 
+              ? transcript.slice(0, 100).trim() + '...'
+              : transcript.trim()
+            
+            const entry: NewEntry = {
+              task_name: taskName,
+              description: transcript, // Keep full transcript as description
+              category: 'personal', // Default category, will be changed later
+              confidence_score: 0, // No AI confidence since not categorized
+              duration_minutes: durationMinutes,
+              voice_transcript: transcript
+            }
+
+            await get().addEntry(entry, userId)
+            set({ isLoading: false })
+          } catch (error) {
+            console.error('Failed to process voice entry:', error)
+            handleError(error, 'addEntryFromVoice')
+          }
+        },
+
+      updateEntry: (id: string, updates: Partial<TimeEntry>) => {
+        set(state => ({
+          entries: state.entries.map(entry => 
+            entry.id === id ? { ...entry, ...updates, updated_at: new Date().toISOString() } : entry
+          )
+        }))
       },
 
-      addEntry: async (entry: NewEntry) => {
-        const { userId } = get()
-        if (!userId) {
-          set({ error: 'User ID required' })
-          return
-        }
-
-        set({ isLoading: true, error: null })
-
-        try {
-          // Try to save to Supabase
-          const { data, error } = await supabase
-            .from('time_entries')
-            .insert([{ ...entry, user_id: userId }])
-            .select()
-            .single()
-
-          if (error) throw error
-
-          // Add to local state
+        deleteEntry: (id: string) => {
           set(state => ({
-            entries: [data, ...state.entries],
-            isLoading: false
+            entries: state.entries.filter(entry => entry.id !== id)
           }))
-        } catch (error) {
-          console.error('Failed to save entry:', error)
+        },
+
+        retryFailedEntries: async () => {
+          const { failedEntries } = get()
+          set({ isLoading: true, error: null })
           
-          // If offline or error, queue for later sync
-          set(state => ({
-            syncQueue: [...state.syncQueue, entry],
-            isLoading: false,
-            error: 'Entry saved offline - will sync when connection restored'
-          }))
-
-          // Also add to local state with temporary ID
-          const tempEntry: TimeEntry = {
-            id: `temp-${Date.now()}`,
-            user_id: userId,
-            created_at: new Date().toISOString(),
-            ...entry
+          const successfulIds: string[] = []
+          
+          for (const failedEntry of failedEntries) {
+            try {
+              await get().addEntry(failedEntry.entry, failedEntry.userId)
+              successfulIds.push(failedEntry.errorId)
+            } catch (error) {
+              console.error('Failed to retry entry:', error)
+            }
           }
           
+          // Remove successful retries
           set(state => ({
-            entries: [tempEntry, ...state.entries]
-          }))
-        }
-      },
-
-      addEntryFromVoice: async (transcript: string, durationMinutes = 15) => {
-        set({ isLoading: true, error: null })
-
-        try {
-          // Get AI categorization
-          const categoryResult: CategoryResult = await categorizeTask(transcript)
-          
-          const entry: NewEntry = {
-            task_name: categoryResult.taskName,
-            description: categoryResult.description,
-            category: categoryResult.category,
-            confidence_score: categoryResult.confidence,
-            duration_minutes: durationMinutes,
-            voice_transcript: transcript
-          }
-
-          await get().addEntry(entry)
-        } catch (error) {
-          console.error('Failed to process voice entry:', error)
-          set({ 
-            error: 'Failed to process voice recording',
-            isLoading: false 
-          })
-        }
-      },
-
-      updateEntry: async (id: string, updates: Partial<TimeEntry>) => {
-        set({ isLoading: true, error: null })
-
-        try {
-          const { error } = await supabase
-            .from('time_entries')
-            .update(updates)
-            .eq('id', id)
-
-          if (error) throw error
-
-          set(state => ({
-            entries: state.entries.map(entry => 
-              entry.id === id ? { ...entry, ...updates } : entry
-            ),
+            failedEntries: state.failedEntries.filter(fe => !successfulIds.includes(fe.errorId)),
             isLoading: false
           }))
-        } catch (error) {
-          console.error('Failed to update entry:', error)
-          set({ 
-            error: 'Failed to update entry',
-            isLoading: false 
-          })
-        }
-      },
+        },
 
-      deleteEntry: async (id: string) => {
-        set({ isLoading: true, error: null })
-
-        try {
-          const { error } = await supabase
-            .from('time_entries')
-            .delete()
-            .eq('id', id)
-
-          if (error) throw error
-
+        removeFailedEntry: (errorId: string) => {
           set(state => ({
-            entries: state.entries.filter(entry => entry.id !== id),
-            isLoading: false
+            failedEntries: state.failedEntries.filter(fe => fe.errorId !== errorId)
           }))
-        } catch (error) {
-          console.error('Failed to delete entry:', error)
-          set({ 
-            error: 'Failed to delete entry',
-            isLoading: false 
-          })
-        }
-      },
+        },
 
-      loadEntries: async () => {
-        const { userId } = get()
-        if (!userId) return
-
-        set({ isLoading: true, error: null })
-
-        try {
-          const { data, error } = await supabase
-            .from('time_entries')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(50)
-
-          if (error) throw error
-
-          set({ 
-            entries: data || [],
-            isLoading: false 
-          })
-        } catch (error) {
-          console.error('Failed to load entries:', error)
-          set({ 
-            error: 'Failed to load entries',
-            isLoading: false 
-          })
-        }
-      },
-
-      syncOfflineEntries: async () => {
-        const { syncQueue, userId } = get()
-        if (!userId || syncQueue.length === 0) return
-
-        set({ isLoading: true })
-
-        try {
-          const { data, error } = await supabase
-            .from('time_entries')
-            .insert(syncQueue.map(entry => ({ ...entry, user_id: userId })))
-            .select()
-
-          if (error) throw error
-
-          // Remove synced entries from queue and add to entries
-          set(state => ({
-            syncQueue: [],
-            entries: [...(data || []), ...state.entries.filter(e => !e.id.startsWith('temp-'))],
-            isLoading: false,
-            error: null
-          }))
-        } catch (error) {
-          console.error('Failed to sync offline entries:', error)
-          set({ 
-            error: 'Failed to sync offline entries',
-            isLoading: false 
-          })
-        }
-      },
-
-      clearError: () => set({ error: null })
-    }),
+        clearError: () => set({ 
+          error: null, 
+          errorId: null, 
+          retryCount: 0, 
+          lastRetryAt: null 
+        })
+      }
+    },
     {
       name: 'find-five-entries',
       partialize: (state) => ({ 
-        entries: state.entries,
-        syncQueue: state.syncQueue,
-        userId: state.userId
+        entries: state.entries
       })
     }
   )

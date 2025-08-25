@@ -1,41 +1,64 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { TaskList } from '@/components/task-list'
-import { TaskModal } from '@/components/task-modal'
-import { BottomNav } from '@/components/bottom-nav'
+import { TaskList } from '@/components/task-list-mantine'
+import { TaskModal } from '@/components/task-modal-mantine'
+import { BottomNav } from '@/components/bottom-nav-mantine'
+import { SyncStatus } from '@/components/sync-status'
+import { SessionCard } from '@/components/session/session-card'
+import { InterruptionFAB } from '@/components/interruption/interruption-fab'
 import { useEntriesStore } from '@/store/entries-store'
+import { useUser } from '@/lib/user-context'
 import { VoiceRecorder } from '@/lib/voice-recorder'
-import { Mic, Plus, Keyboard, RotateCcw, Trash2 } from 'lucide-react'
+import { Mic, Plus, Keyboard, RotateCcw } from 'lucide-react'
+import { 
+  Container, 
+  Title, 
+  Text, 
+  Card, 
+  Button, 
+  Group, 
+  Stack, 
+  SegmentedControl,
+  Box,
+  Affix,
+  Transition,
+  rem
+} from '@mantine/core'
 
 export default function Home() {
-  const { userId, setUserId, syncOfflineEntries, addEntryFromVoice } = useEntriesStore()
+  const { addEntryFromVoice } = useEntriesStore()
+  const { userId, isAuthenticated, isLoading } = useUser()
   const [activeTab, setActiveTab] = useState('Today')
   const [isRecording, setIsRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [currentDate, setCurrentDate] = useState('')
   const recorderRef = useRef<VoiceRecorder | null>(null)
 
+  // Handle mounting and date generation
   useEffect(() => {
-    // Initialize user ID for MVP
-    if (!userId) {
-      let storedUserId = localStorage.getItem('find-five-user-id')
-      if (!storedUserId) {
-        storedUserId = `user-${Date.now()}`
-        localStorage.setItem('find-five-user-id', storedUserId)
-      }
-      setUserId(storedUserId)
-    }
-  }, [userId, setUserId])
+    setMounted(true)
+    const date = new Date()
+    setCurrentDate(date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    }))
+  }, [])
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    // Try to sync offline entries when app loads
-    if (userId) {
-      syncOfflineEntries()
+    if (!isLoading && !isAuthenticated) {
+      window.location.href = '/auth/signin?redirect=/'
     }
-  }, [userId, syncOfflineEntries])
+  }, [isAuthenticated, isLoading])
 
+  // Initialize voice recorder - always call this hook
   useEffect(() => {
+    if (!mounted || !isAuthenticated) return
+
     const recorder = new VoiceRecorder({
       onStart: () => {
         setIsRecording(true)
@@ -65,28 +88,26 @@ export default function Home() {
         recorder.stopRecording()
       }
     }
-  }, [transcript])
+  }, [mounted, isAuthenticated, transcript])
 
-  const getCurrentDate = () => {
-    const date = new Date()
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric'
-    })
+  // Show loading while checking auth or not mounted
+  if (isLoading || !mounted) {
+    return (
+      <Container size="sm" px="md">
+        <Stack align="center" justify="center" style={{ minHeight: '100vh' }}>
+          <Text>Loading...</Text>
+        </Stack>
+      </Container>
+    )
   }
 
-  const getCurrentTime = () => {
-    const date = new Date()
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    })
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null
   }
 
   const handleVoiceTranscript = async (transcript: string) => {
-    await addEntryFromVoice(transcript, 15)
+    await addEntryFromVoice(transcript, userId, 15)
   }
 
   const handleMouseDown = () => {
@@ -111,128 +132,184 @@ export default function Home() {
     handleMouseUp()
   }
 
-  const tabs = ['Today', 'This Week', 'Insights']
-
   return (
-    <div className="min-h-screen pb-20" style={{ backgroundColor: 'var(--background)' }}>
+    <Box pb={80} mih="100vh" bg="gray.0">
+      <Container size="sm" px="md">
+        <Stack py="xl" gap="xl">
+          {/* Header */}
+          <Box>
+            <Title order={1} size="h1" fw={800}>
+              Find Five
+            </Title>
+            <Text size="lg" c="dimmed">
+              {currentDate}
+            </Text>
+          </Box>
 
-      {/* Header */}
-      <div className="px-6 pt-8 pb-4">
-        <h1 className="text-4xl font-bold mb-1" style={{ color: 'var(--foreground)' }}>
-          Find Five
-        </h1>
-        <p className="text-lg" style={{ color: 'var(--secondary-text)' }}>
-          {getCurrentDate()}
-        </p>
-      </div>
+          {/* Tab Navigation */}
+          <SegmentedControl
+            value={activeTab}
+            onChange={setActiveTab}
+            data={['Today', 'This Week', 'Insights']}
+            radius="xl"
+            size="md"
+            fullWidth
+          />
 
-      {/* Tab Navigation */}
-      <div className="px-6 mb-6">
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-full font-medium text-sm transition-colors ${
-                activeTab === tab
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
+          {/* Quick Capture Card */}
+          <Card 
+            radius="xl" 
+            padding="xl"
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+            }}
+            shadow="xl"
+          >
+            <Stack gap="lg">
+              <Box>
+                <Title order={2} c="white" mb="xs">
+                  Quick Capture
+                </Title>
+                <Text size="lg" c="white" opacity={0.9}>
+                  Tap and hold to record what you're doing
+                </Text>
+              </Box>
 
-      {/* Main Content */}
-      <div className="px-6 space-y-6">
-        {/* Quick Capture Card */}
-        <div className="rounded-3xl p-6 card-shadow-lg gradient-primary">
-          <h2 className="text-2xl font-semibold text-white mb-2">
-            Quick Capture
-          </h2>
-          <p className="text-white/90 text-lg mb-8">
-            Tap and hold to record what you're doing
-          </p>
+              {/* Voice Button */}
+              <Box ta="center" py="md">
+                <Box
+                  component="button"
+                  onMouseDown={handleMouseDown}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  style={{
+                    width: 96,
+                    height: 96,
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    background: isRecording ? 'var(--mantine-color-red-6)' : 'white',
+                    transform: isRecording ? 'scale(1.1)' : 'scale(1)',
+                    position: 'relative',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  <Mic 
+                    size={40}
+                    color={isRecording ? 'white' : '#667eea'}
+                  />
+                  {isRecording && (
+                    <Box
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: '50%',
+                        border: '4px solid',
+                        borderColor: 'var(--mantine-color-red-3)',
+                        animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
+                      }}
+                    />
+                  )}
+                </Box>
+              </Box>
+              
+              <Transition mounted={isRecording && !!transcript} transition="fade">
+                {(styles) => (
+                  <Text style={styles} ta="center" c="white" fs="italic" size="sm">
+                    "{transcript}"
+                  </Text>
+                )}
+              </Transition>
+              
+              <Transition mounted={isRecording} transition="fade">
+                {(styles) => (
+                  <Box style={styles}>
+                    <Text ta="center" c="white" fw={500}>Recording...</Text>
+                    <Text ta="center" c="white" size="sm" opacity={0.8}>
+                      Hold to continue, release to stop
+                    </Text>
+                  </Box>
+                )}
+              </Transition>
 
-          {/* Voice Button */}
-          <div className="flex justify-center mb-8">
-            <button 
-              className={`w-24 h-24 rounded-full flex items-center justify-center card-shadow-lg transition-all duration-200 ${
-                isRecording 
-                  ? 'bg-red-500 scale-110 animate-pulse' 
-                  : 'bg-white hover:bg-gray-50 active:scale-95'
-              }`}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-            >
-              <Mic 
-                className={`w-10 h-10 ${isRecording ? 'text-white' : ''}`} 
-                style={{ color: isRecording ? 'white' : 'var(--gradient-start)' }}
-              />
-              {isRecording && (
-                <div className="absolute inset-0 rounded-full border-4 border-red-300 animate-ping" />
-              )}
-            </button>
-          </div>
-          
-          {isRecording && transcript && (
-            <div className="text-center mb-4">
-              <p className="text-white/90 text-sm italic">"{transcript}"</p>
-            </div>
-          )}
-          
-          {isRecording && (
-            <div className="text-center mb-6">
-              <p className="text-white font-medium">Recording...</p>
-              <p className="text-white/80 text-sm">Hold to continue, release to stop</p>
-            </div>
-          )}
+              {/* Action Buttons */}
+              <Group justify="center">
+                <Button 
+                  variant="white"
+                  color="dark"
+                  leftSection={<Keyboard size={16} />}
+                  onClick={() => setIsModalOpen(true)}
+                  radius="xl"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                >
+                  Type
+                </Button>
+                <Button 
+                  variant="white"
+                  color="dark"
+                  leftSection={<RotateCcw size={16} />}
+                  onClick={() => {
+                    setTranscript('')
+                    if (isRecording) {
+                      recorderRef.current?.stopRecording()
+                    }
+                  }}
+                  radius="xl"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+                >
+                  Restart
+                </Button>
+              </Group>
+            </Stack>
+          </Card>
 
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-4">
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-full text-white/90 text-sm font-medium hover:bg-white/30 transition-colors"
-            >
-              <Keyboard className="w-4 h-4" />
-              Type
-            </button>
-            <button 
-              onClick={() => {
-                setTranscript('')
-                if (isRecording) {
-                  recorderRef.current?.stopRecording()
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-full text-white/90 text-sm font-medium hover:bg-white/30 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Restart
-            </button>
-          </div>
-        </div>
+          {/* Session Card */}
+          <SessionCard />
 
-        <TaskList />
-      </div>
+          <TaskList />
+
+          {/* Sync Status */}
+          <SyncStatus />
+        </Stack>
+      </Container>
 
       {/* Floating Action Button */}
-      <button 
-        onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-20 right-6 w-14 h-14 rounded-full flex items-center justify-center fab-shadow gradient-primary"
-      >
-        <Plus className="w-8 h-8 text-white" />
-      </button>
+      <Affix position={{ bottom: 90, right: 20 }}>
+        <Transition transition="slide-up" mounted={true}>
+          {(transitionStyles) => (
+            <Button
+              size="xl"
+              radius="xl"
+              onClick={() => setIsModalOpen(true)}
+              style={{
+                ...transitionStyles,
+                width: 56,
+                height: 56,
+                padding: 0,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              }}
+            >
+              <Plus size={28} />
+            </Button>
+          )}
+        </Transition>
+      </Affix>
 
       {/* Task Modal */}
       <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
+      {/* Interruption FAB */}
+      <InterruptionFAB />
+
       {/* Bottom Navigation */}
       <BottomNav />
-    </div>
+    </Box>
   )
 }

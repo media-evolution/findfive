@@ -2,30 +2,91 @@
 
 import { useEffect, useState } from 'react'
 import { useEntriesStore } from '@/store/entries-store'
-import { BottomNav } from '@/components/bottom-nav'
-import { ArrowLeft, User, Trash2, Download, Loader2 } from 'lucide-react'
+import { useUser } from '@/lib/user-context'
+import { BottomNav } from '@/components/bottom-nav-mantine'
+import { LeaveDayManager } from '@/components/session/leave-day-manager'
+import { SessionHistory } from '@/components/session/session-history'
+import { NotificationSettings } from '@/components/notification/notification-settings'
+import { ArrowLeft, User, Trash2, Download, Bell, Palette, Clock, Shield } from 'lucide-react'
 import Link from 'next/link'
+import { 
+  Container, 
+  Title, 
+  Paper, 
+  Group, 
+  Text, 
+  Stack, 
+  Card, 
+  Button,
+  TextInput,
+  Switch,
+  Select,
+  ActionIcon,
+  Box,
+  Divider,
+  Badge,
+  Accordion,
+  ThemeIcon,
+  Slider
+} from '@mantine/core'
+import { TimeInput } from '@mantine/dates'
+import { modals } from '@mantine/modals'
+import { notifications } from '@mantine/notifications'
 
 export default function SettingsPage() {
-  const { userId, entries, clearError } = useEntriesStore()
+  const { entries } = useEntriesStore()
+  const { userId } = useUser()
   const [localUserId, setLocalUserId] = useState('')
+  const [settings, setSettings] = useState({
+    notifications: true,
+    notificationInterval: 60,
+    workStartTime: '09:00',
+    workEndTime: '17:00',
+    theme: 'light',
+    voiceEnabled: true,
+    autoCategorize: true,
+    workDays: [1, 2, 3, 4, 5] // Mon-Fri
+  })
 
   useEffect(() => {
     const storedUserId = localStorage.getItem('find-five-user-id') || ''
     setLocalUserId(storedUserId)
+    
+    // Load settings from localStorage
+    const savedSettings = localStorage.getItem('find-five-settings')
+    if (savedSettings) {
+      setSettings({ ...settings, ...JSON.parse(savedSettings) })
+    }
   }, [])
 
   const handleUserIdChange = (newId: string) => {
     setLocalUserId(newId)
     localStorage.setItem('find-five-user-id', newId)
-    // Force page reload to apply new user ID
-    window.location.reload()
+    notifications.show({
+      title: 'User ID Updated',
+      message: 'Page will reload to apply changes',
+      color: 'blue'
+    })
+    setTimeout(() => window.location.reload(), 1500)
+  }
+
+  const updateSetting = (key: string, value: any) => {
+    const newSettings = { ...settings, [key]: value }
+    setSettings(newSettings)
+    localStorage.setItem('find-five-settings', JSON.stringify(newSettings))
+    
+    notifications.show({
+      title: 'Setting Updated',
+      message: `${key} has been updated`,
+      color: 'green'
+    })
   }
 
   const exportData = () => {
     const data = {
       userId,
       entries,
+      settings,
       exportDate: new Date().toISOString(),
       version: '1.0'
     }
@@ -39,140 +100,237 @@ export default function SettingsPage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    
+    notifications.show({
+      title: 'Data Exported',
+      message: 'Your data has been downloaded successfully',
+      color: 'green'
+    })
   }
 
   const clearAllData = () => {
-    if (window.confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-      localStorage.clear()
-      window.location.reload()
-    }
+    modals.openConfirmModal({
+      title: 'Clear All Data',
+      centered: true,
+      children: (
+        <Text size="sm">
+          Are you sure you want to clear all data? This will remove all tasks, settings, and preferences. 
+          This action cannot be undone.
+        </Text>
+      ),
+      labels: { confirm: 'Clear All Data', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        localStorage.clear()
+        notifications.show({
+          title: 'Data Cleared',
+          message: 'All data has been removed. Page will reload.',
+          color: 'red'
+        })
+        setTimeout(() => window.location.reload(), 1500)
+      },
+    })
   }
 
   return (
-    <div className="min-h-screen pb-20" style={{ backgroundColor: 'var(--background)' }}>
+    <Box bg="gray.0" mih="100vh" pb={80}>
       {/* Header */}
-      <div className="gradient-primary text-white p-6">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="p-2 hover:bg-white/10 rounded-xl transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div className="flex items-center gap-2">
-            <User className="w-6 h-6 text-white/90" />
-            <h1 className="text-xl font-semibold">Settings</h1>
-          </div>
-        </div>
-      </div>
+      <Paper
+        radius={0}
+        p="md"
+        style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        }}
+      >
+        <Group>
+          <ActionIcon
+            component={Link}
+            href="/"
+            variant="subtle"
+            color="white"
+            size="lg"
+          >
+            <ArrowLeft size={20} />
+          </ActionIcon>
+          <Group gap="xs">
+            <User size={24} color="white" />
+            <Title order={3} c="white">Settings</Title>
+          </Group>
+        </Group>
+      </Paper>
 
-      {/* Content */}
-      <div className="p-4 space-y-6">
-        {/* User ID Section */}
-        <div className="rounded-3xl card-shadow-lg p-6" style={{ backgroundColor: 'var(--card-background)' }}>
-          <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--foreground)' }}>User Settings</h3>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="userId" className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
-                User ID (for development)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="userId"
-                  type="text"
-                  value={localUserId}
-                  onChange={(e) => setLocalUserId(e.target.value)}
-                  placeholder="Enter user ID"
-                  className="flex-1 px-4 py-3 rounded-2xl outline-none transition-all"
-                  style={{ 
-                    border: '1px solid var(--border)',
-                    backgroundColor: 'var(--card-background)',
-                    color: 'var(--foreground)'
-                  }}
+      <Container size="sm" px="md" py="lg">
+        <Stack gap="lg">
+          {/* User Settings */}
+          <Card radius="xl" withBorder>
+            <Group mb="md">
+              <ThemeIcon variant="light" radius="xl" color="blue">
+                <User size={20} />
+              </ThemeIcon>
+              <Text size="lg" fw={600}>User Settings</Text>
+            </Group>
+            
+            <Stack gap="md">
+              <Box>
+                <Text size="sm" fw={500} mb="xs">User ID (Development)</Text>
+                <Group>
+                  <TextInput
+                    placeholder="Enter user ID"
+                    value={localUserId}
+                    onChange={(e) => setLocalUserId(e.currentTarget.value)}
+                    style={{ flex: 1 }}
+                    radius="xl"
+                  />
+                  <Button
+                    onClick={() => handleUserIdChange(localUserId)}
+                    radius="xl"
+                    disabled={!localUserId || localUserId === userId}
+                  >
+                    Save
+                  </Button>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  Current: {userId || 'Not set'}
+                </Text>
+              </Box>
+            </Stack>
+          </Card>
+
+          {/* Notification Settings */}
+          <NotificationSettings />
+
+          {/* Session Management */}
+          <LeaveDayManager />
+
+          {/* Session History */}
+          <SessionHistory limit={5} />
+
+          {/* Features */}
+          <Card radius="xl" withBorder>
+            <Group mb="md">
+              <ThemeIcon variant="light" radius="xl" color="violet">
+                <Shield size={20} />
+              </ThemeIcon>
+              <Text size="lg" fw={600}>Features</Text>
+            </Group>
+            
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Box>
+                  <Text size="sm" fw={500}>Voice Recording</Text>
+                  <Text size="xs" c="dimmed">Enable voice capture for tasks</Text>
+                </Box>
+                <Switch
+                  checked={settings.voiceEnabled}
+                  onChange={(e) => updateSetting('voiceEnabled', e.currentTarget.checked)}
+                  color="green"
+                  size="md"
                 />
-                <button
-                  onClick={() => handleUserIdChange(localUserId)}
-                  className="px-6 py-3 gradient-primary text-white rounded-2xl card-shadow transition-all"
+              </Group>
+
+              <Divider />
+
+              <Group justify="space-between">
+                <Box>
+                  <Text size="sm" fw={500}>Auto-Categorization</Text>
+                  <Text size="xs" c="dimmed">AI automatically categorizes tasks</Text>
+                </Box>
+                <Switch
+                  checked={settings.autoCategorize}
+                  onChange={(e) => updateSetting('autoCategorize', e.currentTarget.checked)}
+                  color="orange"
+                  size="md"
+                />
+              </Group>
+            </Stack>
+          </Card>
+
+          {/* Data Management */}
+          <Card radius="xl" withBorder>
+            <Group mb="md">
+              <ThemeIcon variant="light" radius="xl" color="teal">
+                <Download size={20} />
+              </ThemeIcon>
+              <Text size="lg" fw={600}>Data Management</Text>
+            </Group>
+            
+            <Stack gap="md">
+              <Group justify="space-between" p="md" style={{ border: '1px solid var(--mantine-color-gray-3)', borderRadius: 'var(--mantine-radius-md)' }}>
+                <Box>
+                  <Text size="sm" fw={500}>Export Data</Text>
+                  <Text size="xs" c="dimmed">Download your tasks and settings as JSON</Text>
+                </Box>
+                <Button
+                  leftSection={<Download size={16} />}
+                  onClick={exportData}
+                  radius="xl"
+                  variant="light"
                 >
-                  Save
-                </button>
-              </div>
-              <p className="text-xs mt-2" style={{ color: 'var(--secondary-text)' }}>
-                Current: {userId || 'Not set'}
-              </p>
-            </div>
-          </div>
-        </div>
+                  Export
+                </Button>
+              </Group>
 
-        {/* Data Management */}
-        <div className="rounded-3xl card-shadow-lg p-6" style={{ backgroundColor: 'var(--card-background)' }}>
-          <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--foreground)' }}>Data Management</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-2xl" style={{ border: '1px solid var(--border)' }}>
-              <div>
-                <h4 className="font-medium" style={{ color: 'var(--foreground)' }}>Export Data</h4>
-                <p className="text-sm" style={{ color: 'var(--secondary-text)' }}>Download your tasks as JSON</p>
-              </div>
-              <button
-                onClick={exportData}
-                className="flex items-center gap-2 px-4 py-3 text-white rounded-2xl card-shadow transition-all"
-                style={{ backgroundColor: 'var(--ios-active)' }}
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-            </div>
+              <Group justify="space-between" p="md" style={{ 
+                border: '1px solid var(--mantine-color-red-3)', 
+                borderRadius: 'var(--mantine-radius-md)',
+                backgroundColor: 'var(--mantine-color-red-0)'
+              }}>
+                <Box>
+                  <Text size="sm" fw={500} c="red">Clear All Data</Text>
+                  <Text size="xs" c="dimmed">Remove all tasks and settings</Text>
+                </Box>
+                <Button
+                  leftSection={<Trash2 size={16} />}
+                  onClick={clearAllData}
+                  color="red"
+                  radius="xl"
+                >
+                  Clear
+                </Button>
+              </Group>
+            </Stack>
+          </Card>
 
-            <div className="flex items-center justify-between p-4 rounded-2xl" style={{ border: '1px solid #ff3b30', backgroundColor: '#ff3b30' + '10' }}>
-              <div>
-                <h4 className="font-medium" style={{ color: '#ff3b30' }}>Clear All Data</h4>
-                <p className="text-sm" style={{ color: 'var(--foreground)' }}>Remove all tasks and settings</p>
-              </div>
-              <button
-                onClick={clearAllData}
-                className="flex items-center gap-2 px-4 py-3 text-white rounded-2xl card-shadow transition-all"
-                style={{ backgroundColor: '#ff3b30' }}
-              >
-                <Trash2 className="w-4 h-4" />
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
+          {/* App Info */}
+          <Card radius="xl" withBorder>
+            <Text size="lg" fw={600} mb="md">App Information</Text>
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Version</Text>
+                <Badge variant="light" size="sm">1.0.0 MVP</Badge>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Tasks Stored</Text>
+                <Text size="sm" fw={500}>{entries.length}</Text>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">PWA Support</Text>
+                <Badge color="green" variant="light" size="sm">Enabled</Badge>
+              </Group>
+              <Group justify="space-between">
+                <Text size="sm" c="dimmed">Offline Mode</Text>
+                <Badge color="blue" variant="light" size="sm">Active</Badge>
+              </Group>
+            </Stack>
+          </Card>
 
-        {/* App Info */}
-        <div className="rounded-3xl card-shadow-lg p-6" style={{ backgroundColor: 'var(--card-background)' }}>
-          <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--foreground)' }}>App Information</h3>
-          <div className="space-y-2 text-sm" style={{ color: 'var(--secondary-text)' }}>
-            <div className="flex justify-between">
-              <span>Version:</span>
-              <span style={{ color: 'var(--foreground)' }}>1.0.0 MVP</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Tasks Stored:</span>
-              <span style={{ color: 'var(--foreground)' }}>{entries.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>PWA Support:</span>
-              <span style={{ color: '#34c759' }}>Enabled</span>
-            </div>
-          </div>
-        </div>
+          {/* About */}
+          <Card radius="xl" withBorder>
+            <Text size="lg" fw={600} mb="md">About Find Five</Text>
+            <Text size="sm" c="dimmed" mb="md">
+              Find Five helps you identify the five most important things to focus on by tracking 
+              where your time goes and categorizing tasks for delegation, automation, or elimination.
+            </Text>
+            <Paper p="md" radius="md" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+              <Text size="sm" c="white" fw={500}>
+                🚀 MVP Version - Core time tracking and AI categorization features
+              </Text>
+            </Paper>
+          </Card>
+        </Stack>
+      </Container>
 
-        {/* About */}
-        <div className="rounded-3xl card-shadow-lg p-6" style={{ backgroundColor: 'var(--card-background)' }}>
-          <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--foreground)' }}>About Find Five</h3>
-          <p className="text-sm leading-relaxed mb-4" style={{ color: 'var(--secondary-text)' }}>
-            Find Five helps you identify the five most important things to focus on by tracking 
-            where your time goes and categorizing tasks for delegation, automation, or elimination.
-          </p>
-          <div className="p-4 rounded-2xl gradient-primary">
-            <p className="text-sm text-white font-medium">
-              MVP Version - Basic functionality for time tracking and AI categorization
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Navigation */}
       <BottomNav />
-    </div>
+    </Box>
   )
 }

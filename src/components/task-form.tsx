@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useEntriesStore } from '@/store/entries-store'
+import { useUser } from '@/lib/user-context'
 import { VoiceButton } from './voice-button'
 import { Clock, Save, Loader2 } from 'lucide-react'
 
@@ -11,10 +12,20 @@ export function TaskForm() {
   const [duration, setDuration] = useState(15)
   const [category, setCategory] = useState<'delegate' | 'automate' | 'eliminate' | 'personal'>('personal')
   
+  // V2 fields
+  const [energyLevel, setEnergyLevel] = useState<number>(3)
+  const [taskMode, setTaskMode] = useState<'proactive' | 'reactive'>('proactive')
+  const [enjoyment, setEnjoyment] = useState<'like' | 'neutral' | 'dislike'>('neutral')
+  const [taskType, setTaskType] = useState<'personal' | 'work' | 'both'>('work')
+  const [frequency, setFrequency] = useState<'daily' | 'regular' | 'infrequent'>('regular')
+  const [urgency, setUrgency] = useState<'urgent' | 'not_urgent'>('not_urgent')
+  const [importance, setImportance] = useState<'important' | 'not_important'>('important')
+  
   const { addEntry, addEntryFromVoice, isLoading, error } = useEntriesStore()
+  const { userId } = useUser()
 
   const handleVoiceTranscript = async (transcript: string) => {
-    await addEntryFromVoice(transcript, duration)
+    await addEntryFromVoice(transcript, userId, duration)
     // Clear form after voice entry
     setTaskName('')
     setDescription('')
@@ -28,8 +39,18 @@ export function TaskForm() {
       task_name: taskName.trim(),
       description: description.trim() || undefined,
       category,
-      duration_minutes: duration
-    })
+      duration_minutes: duration,
+      // V2 fields
+      energy_level: energyLevel,
+      task_mode: taskMode,
+      enjoyment: enjoyment,
+      task_type: taskType,
+      frequency: frequency,
+      recorded_at: new Date().toISOString(),
+      recording_delay_minutes: 0,
+      urgency: urgency,
+      importance: importance
+    }, userId)
 
     // Clear form
     setTaskName('')
@@ -160,6 +181,159 @@ export function TaskForm() {
                       {label}
                     </option>
                   ))}
+                </select>
+              </div>
+            </div>
+
+            {/* V2 Enhanced Fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Energy Level (1-5)
+                </label>
+                <select
+                  value={energyLevel}
+                  onChange={(e) => setEnergyLevel(parseInt(e.target.value))}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value={1}>1 - Very Low</option>
+                  <option value={2}>2 - Low</option>
+                  <option value={3}>3 - Medium</option>
+                  <option value={4}>4 - High</option>
+                  <option value={5}>5 - Very High</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Task Mode
+                </label>
+                <select
+                  value={taskMode}
+                  onChange={(e) => setTaskMode(e.target.value as 'proactive' | 'reactive')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="proactive">Proactive</option>
+                  <option value="reactive">Reactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Enjoyment
+                </label>
+                <select
+                  value={enjoyment}
+                  onChange={(e) => setEnjoyment(e.target.value as 'like' | 'neutral' | 'dislike')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="like">👍 Like</option>
+                  <option value="neutral">😐 Neutral</option>
+                  <option value="dislike">👎 Dislike</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Task Type
+                </label>
+                <select
+                  value={taskType}
+                  onChange={(e) => setTaskType(e.target.value as 'personal' | 'work' | 'both')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="personal">Personal</option>
+                  <option value="work">Work</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Frequency
+                </label>
+                <select
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as 'daily' | 'regular' | 'infrequent')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="regular">Regular</option>
+                  <option value="infrequent">Infrequent</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Urgency
+                </label>
+                <select
+                  value={urgency}
+                  onChange={(e) => setUrgency(e.target.value as 'urgent' | 'not_urgent')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="urgent">🔥 Urgent</option>
+                  <option value="not_urgent">⏰ Not Urgent</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--foreground)' }}>
+                  Importance
+                </label>
+                <select
+                  value={importance}
+                  onChange={(e) => setImportance(e.target.value as 'important' | 'not_important')}
+                  className="w-full px-4 py-3 rounded-2xl outline-none transition-all"
+                  style={{ 
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--card-background)',
+                    color: 'var(--foreground)'
+                  }}
+                  disabled={isLoading}
+                >
+                  <option value="important">⭐ Important</option>
+                  <option value="not_important">➖ Not Important</option>
                 </select>
               </div>
             </div>

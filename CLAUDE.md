@@ -11,12 +11,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Development server with Turbopack:
 ```bash
 npm run dev -- --turbo
+```
+
 Build production version:
-bashnpm run build
+```bash
+npm run build
+```
+
 Production server:
-bashnpm start
+```bash
+npm start
+```
+
 Type checking:
-bashnpm run type-check
+```bash
+npm run type-check
+```
 Architecture
 Core Technologies
 
@@ -341,4 +351,55 @@ Ask for clarification rather than assume
 See `SPRINT.md` for current sprint objectives and task tracking.  
 See `DEVLOG.md` for development history and decisions.
 
+Sub-Agents
+
+## 🔧 Development Support
+- `documentation-specialist` - Technical documentation
+
+## 🐛 Debugging & Troubleshooting
+- `senior-debugger` - Multi-model complex issue resolution
+
+## 🧪 Available Testing & Auth MCP Servers
+
+  This project has access to specialized MCP servers for comprehensive testing and authentication consulting:
+
+  ### Chrome DevTools MCP
+  **Purpose**: Real-time browser debugging and performance analysis
+  **Use for**: Network request debugging, JavaScript console errors, performance bottlenecks
+  ```javascript
+  start_chrome_and_connect("localhost:3000")
+  get_network_requests(filter_status=500)
+  get_console_error_summary()
+
+  Authentication Expert Agent
+
+  Purpose: Senior authentication consultant with research capabilities
+  Use for: Auth system design, security audits, debugging login issues, provider comparisons
+  debug_auth_issue({
+    issueDescription: "Users getting logged out randomly",
+    environment: { framework: "Next.js" }
+  })
+  research_auth_methods(["oauth2", "jwt", "passwordless"])
+
+  Functional Testing Agent
+
+  Purpose: Automated feature and workflow validationUse for: Testing user flows, forms, API endpoints, authentication workflows
+  init_test_session({ baseUrl: "localhost:3000" })
+  test_authentication({ authType: "login" })
+  test_form_submission({ formName: "Contact Form" })
+
+  UI/UX Testing Agent
+
+  Purpose: Design consistency and accessibility analysis
+  Use for: Visual regression testing, accessibility audits, responsive design validation
+  start_testing_session({ url: "localhost:3000" })
+  test_accessibility()
+  test_responsive_design()
+
+  Quick Testing Workflow
+
+  1. Debug technical issues: Use Chrome DevTools MCP
+  2. Test authentication: Use Authentication Expert + Functional Testing
+  3. Validate user experience: Use UI/UX Testing Agent
+  4. Generate reports: All agents export Markdown/JSON reports
 Remember: We're building fast but maintaining quality. Code should be clean enough to iterate on tomorrow.
