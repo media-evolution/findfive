@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BarChart3, Grid3X3, Settings } from 'lucide-react'
-import { Box, Group, UnstyledButton, Text, Paper } from '@mantine/core'
+import { Home, BarChart3, Settings } from 'lucide-react'
+import { Group, UnstyledButton, Text, Paper } from '@mantine/core'
 
 export function BottomNav() {
   const pathname = usePathname()
@@ -20,12 +20,6 @@ export function BottomNav() {
       icon: BarChart3, 
       label: 'Analytics',
       active: pathname === '/analytics'
-    },
-    { 
-      href: '/eisenhower', 
-      icon: Grid3X3, 
-      label: 'Matrix',
-      active: pathname === '/eisenhower'
     },
     { 
       href: '/settings', 
