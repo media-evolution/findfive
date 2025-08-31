@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd mobile-pwa && npm run build",
+  "outputDirectory": "mobile-pwa/.next",
+  "installCommand": "cd mobile-pwa && npm install",
+  "rootDirectory": "mobile-pwa"
+}

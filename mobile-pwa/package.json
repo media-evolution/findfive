@@ -6,7 +6,8 @@
     "dev": "next dev --port 3002 --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "vercel-build": "next build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
