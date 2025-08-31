@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ColorSchemeScript } from '@mantine/core';
 import { Providers } from './providers';
-import { SessionProgressHeader } from '@/components/session/session-progress-header';
+import { AuthenticatedLayout } from '@/components/layout/authenticated-layout';
 import "./globals.css";
 
 const geistSans = Geist({
@@ -67,8 +67,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <SessionProgressHeader />
-          {children}
+          <AuthenticatedLayout>
+            {children}
+          </AuthenticatedLayout>
         </Providers>
       </body>
     </html>

@@ -19,7 +19,8 @@
       "Bash(npm run:*)",
       "WebSearch",
       "WebFetch(domain:www.better-auth.com)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(npm init:*)"
     ],
     "deny": []
   }

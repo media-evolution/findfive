@@ -1,9 +1,0 @@
-<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <rect width="32" height="32" fill="#FF6B6B" rx="4.8"/>
-  <circle cx="16" cy="11.2" r="4.8" fill="white"/>
-  <path d="M8 17.6 Q16 20.8 24 17.6" 
-        stroke="white" stroke-width="1.6" fill="none" stroke-linecap="round"/>
-  <text x="16" y="27.2" text-anchor="middle" 
-        font-family="system-ui, -apple-system, sans-serif" 
-        font-size="2.56" fill="white" font-weight="bold">5</text>
-</svg>
